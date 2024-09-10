@@ -29,7 +29,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
     app.UseCors("allConnections");
 
-    builder.Services.ConfigureDatabaseForDevelopmentAsync(app);
+    _ = builder.Services.ConfigureDatabaseForDevelopmentAsync(app);
 }
 
 app.UseHttpsRedirection();

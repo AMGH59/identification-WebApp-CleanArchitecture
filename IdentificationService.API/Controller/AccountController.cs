@@ -1,4 +1,6 @@
-﻿using IdentificationService.Application.Constants;
+﻿using IdentificationService.API.DTO;
+using IdentificationService.API.Filters;
+using IdentificationService.Application.Constants;
 using IdentificationService.Application.Interfaces;
 using IdentificationService.Application.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -8,6 +10,7 @@ namespace IdentificationService.API.Controller
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ValidateAccount]
     public class AccountController : ControllerBase
     {
         private readonly IIdentityService _identityService;
@@ -18,10 +21,11 @@ namespace IdentificationService.API.Controller
         }
 
         [HttpPost("signin")]
-        public async Task<IActionResult> SignIn([FromForm] LoginModel model)
+        public async Task<IActionResult> SignIn([FromForm] LoginDTO model)
         {
             try
             {
+                var loginModel = new LoginModel(model.Username, model.Password);
                 var token = await _identityService.LoginUserAsync(model.Username, model.Password);
 
                 return Ok(new { token });
@@ -34,10 +38,11 @@ namespace IdentificationService.API.Controller
 
         [HttpPost("create")]
         [Authorize(Roles = RoleTypes.Admin)]
-        public async Task<IActionResult> Create([FromForm] UserModel model)
+        public async Task<IActionResult> Create([FromForm] UserDTO model)
         {
             try
             {
+                var userModel = new UserModel(model.Username, model.Password, model.Roles);
                 var user = await _identityService.CreateUserAsync(model.Username, model.Password, model.Roles);
 
                 return Ok(new { user });
