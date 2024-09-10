@@ -3,6 +3,7 @@ using IdentificationService.Domain.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using System.ComponentModel.DataAnnotations;
 using System.IdentityModel.Tokens.Jwt;
@@ -16,16 +17,20 @@ namespace IdentificationService.Domain.Services
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly RoleManager<ApplicationRole> _roleManager;
         private readonly IConfiguration _configuration;
+        private readonly ILogger<IdentityService> _logger;
 
-        public IdentityService(UserManager<ApplicationUser> userManager, RoleManager<ApplicationRole> roleManager, IConfiguration configuration)
+        public IdentityService(UserManager<ApplicationUser> userManager, RoleManager<ApplicationRole> roleManager, IConfiguration configuration, ILogger<IdentityService> logger)
         {
             _userManager = userManager;
             _roleManager = roleManager;
             _configuration = configuration;
+            _logger = logger;
         }
 
         public async Task<ApplicationUser> CreateUserAsync(string userName, string password, List<string> roles)
         {
+            _logger.LogInformation("Creating user with username: {UserName}", userName);
+
             ValidateUserName(userName);
             ValidatePassword(password);
             ValidateRoles(roles);
@@ -36,21 +41,26 @@ namespace IdentificationService.Domain.Services
 
             if (!result.Succeeded)
             {
-                throw new ValidationException(result.Errors.ToString());
+                _logger.LogWarning("Failed to create user: {UserName}. Errors: {Errors}", userName, string.Join(", ", result.Errors.Select(e => e.Description)));
+                throw new ValidationException(string.Join(", ", result.Errors.Select(e => e.Description)));
             }
 
             var addUserRole = await _userManager.AddToRolesAsync(user, roles);
 
             if (!addUserRole.Succeeded)
             {
-                throw new ValidationException(addUserRole.Errors.ToString());
+                _logger.LogWarning("Failed to add roles to user: {UserName}. Errors: {Errors}", userName, string.Join(", ", addUserRole.Errors.Select(e => e.Description)));
+                throw new ValidationException(string.Join(", ", addUserRole.Errors.Select(e => e.Description)));
             }
 
+            _logger.LogInformation("User created successfully: {UserName}", userName);
             return user;
         }
 
         public async Task<ApplicationRole> CreateRoleAsync(string roleName)
         {
+            _logger.LogInformation("Creating role with name: {RoleName}", roleName);
+
             ValidateRoleName(roleName);
 
             var role = new ApplicationRole(roleName);
@@ -59,14 +69,18 @@ namespace IdentificationService.Domain.Services
 
             if (!result.Succeeded)
             {
+                _logger.LogWarning("Failed to create role: {RoleName}. Errors: {Errors}", roleName, string.Join(", ", result.Errors.Select(e => e.Description)));
                 throw new Exception("An error occurred during role creation.");
             }
 
+            _logger.LogInformation("Role created successfully: {RoleName}", roleName);
             return role;
         }
 
         public async Task<bool> AssignUserToRole(string userName, IList<string> roles)
         {
+            _logger.LogInformation("Assigning roles to user: {UserName}", userName);
+
             ValidateUserName(userName);
             ValidateRoles(roles);
 
@@ -75,11 +89,19 @@ namespace IdentificationService.Domain.Services
 
             var result = await _userManager.AddToRolesAsync(user, roles);
 
+            if (!result.Succeeded)
+            {
+                _logger.LogWarning("Failed to assign roles to user: {UserName}. Errors: {Errors}", userName, string.Join(", ", result.Errors.Select(e => e.Description)));
+            }
+
+            _logger.LogInformation("Roles assigned to user: {UserName}", userName);
             return result.Succeeded;
         }
 
         public async Task<string> LoginUserAsync(string userName, string password)
         {
+            _logger.LogInformation("Logging in user with username: {UserName}", userName);
+
             ValidateUserName(userName);
             ValidatePassword(password);
 
@@ -88,10 +110,13 @@ namespace IdentificationService.Domain.Services
 
             if (!await CheckPasswordAsync(user, password))
             {
+                _logger.LogWarning("Invalid credentials for user: {UserName}", userName);
                 throw new ValidationException("Invalid credentials.");
             }
 
-            return await GenerateToken(user);
+            var token = await GenerateToken(user);
+            _logger.LogInformation("User logged in successfully: {UserName}", userName);
+            return token;
         }
 
         private async Task<string> GenerateToken(ApplicationUser user)
