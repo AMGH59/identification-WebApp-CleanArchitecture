@@ -2,6 +2,7 @@
 using IdentificationService.Domain.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Moq;
 using System.ComponentModel.DataAnnotations;
 using Xunit;
@@ -13,6 +14,7 @@ namespace IdentificationService.Application.Tests.Services
         private readonly Mock<UserManager<ApplicationUser>> _mockUserManager;
         private readonly Mock<RoleManager<ApplicationRole>> _mockRoleManager;
         private readonly Mock<IConfiguration> _mockConfiguration;
+        private readonly Mock<ILogger<IdentityService>> _mockLogger;
         private readonly IdentityService _identityService;
 
         public IdentityServiceTests()
@@ -20,7 +22,8 @@ namespace IdentificationService.Application.Tests.Services
             _mockUserManager = MockUserManager();
             _mockRoleManager = MockRoleManager();
             _mockConfiguration = new Mock<IConfiguration>();
-            _identityService = new IdentityService(_mockUserManager.Object, _mockRoleManager.Object, _mockConfiguration.Object);
+            _mockLogger = new Mock<ILogger<IdentityService>>();
+            _identityService = new IdentityService(_mockUserManager.Object, _mockRoleManager.Object, _mockConfiguration.Object, _mockLogger.Object);
         }
 
         [Fact]
