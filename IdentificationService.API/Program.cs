@@ -1,9 +1,12 @@
 using IdentificationService.API;
+using IdentificationService.API.Extensions;
 using IdentificationService.Application;
 using IdentificationService.Application.Constants;
 using IdentificationService.Database;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.ConfigureElasticsearch(builder.Configuration);
 
 builder.Services.ConfigureDatabase(builder.Configuration);
 builder.Services.ConfigureApi();
