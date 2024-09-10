@@ -26,6 +26,10 @@ namespace IdentificationService.Domain.Services
 
         public async Task<ApplicationUser> CreateUserAsync(string userName, string password, List<string> roles)
         {
+            ValidateUserName(userName);
+            ValidatePassword(password);
+            ValidateRoles(roles);
+
             var user = new ApplicationUser(userName);
 
             var result = await _userManager.CreateAsync(user, password);
@@ -47,16 +51,25 @@ namespace IdentificationService.Domain.Services
 
         public async Task<ApplicationRole> CreateRoleAsync(string roleName)
         {
+            ValidateRoleName(roleName);
+
             var role = new ApplicationRole(roleName);
 
-            var result = await _roleManager.CreateAsync(role)
-                ?? throw new Exception("An error occurred during role creation.");
+            var result = await _roleManager.CreateAsync(role);
+
+            if (!result.Succeeded)
+            {
+                throw new Exception("An error occurred during role creation.");
+            }
 
             return role;
         }
 
         public async Task<bool> AssignUserToRole(string userName, IList<string> roles)
         {
+            ValidateUserName(userName);
+            ValidateRoles(roles);
+
             var user = await _userManager.Users.FirstOrDefaultAsync(x => x.UserName == userName)
                 ?? throw new Exception("User not found.");
 
@@ -67,11 +80,16 @@ namespace IdentificationService.Domain.Services
 
         public async Task<string> LoginUserAsync(string userName, string password)
         {
+            ValidateUserName(userName);
+            ValidatePassword(password);
+
             var user = await _userManager.Users.SingleOrDefaultAsync(u => u.UserName == userName)
-                ?? throw new ArgumentNullException("An error occurred during credentials checking.");
+                ?? throw new ArgumentNullException("User not found.");
 
             if (!await CheckPasswordAsync(user, password))
-                throw new ValidationException("An error occurred during credentials checking.");
+            {
+                throw new ValidationException("Invalid credentials.");
+            }
 
             return await GenerateToken(user);
         }
@@ -80,15 +98,21 @@ namespace IdentificationService.Domain.Services
         {
             var claims = await GenerateClaims(user);
 
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]));
-            var credantials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var key = _configuration["Jwt:Key"];
+            if (string.IsNullOrEmpty(key))
+            {
+                throw new ArgumentNullException("JWT key is not configured.");
+            }
+
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
+            var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
                 _configuration["Jwt:Issuer"],
                 _configuration["Jwt:Audience"],
                 claims,
                 expires: DateTime.Now.AddMinutes(30),
-                signingCredentials: credantials
+                signingCredentials: credentials
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
@@ -96,16 +120,16 @@ namespace IdentificationService.Domain.Services
 
         private async Task<IEnumerable<Claim>> GenerateClaims(ApplicationUser user)
         {
-            var claims = new List<Claim>()
-                {
-                    new(JwtRegisteredClaimNames.Sub, user.UserName),
-                    new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                };
+            ArgumentNullException.ThrowIfNull(user);
 
-            foreach (var role in await _userManager.GetRolesAsync(user))
+            var claims = new List<Claim>
             {
-                claims.Add(new Claim(ClaimTypes.Role, role));
-            }
+                new(JwtRegisteredClaimNames.Sub, user.UserName ?? throw new ArgumentNullException(nameof(user.UserName))),
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            };
+
+            var roles = await _userManager.GetRolesAsync(user);
+            claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
             return claims;
         }
@@ -115,5 +139,36 @@ namespace IdentificationService.Domain.Services
             return await _userManager.CheckPasswordAsync(user, password);
         }
 
+        private void ValidateUserName(string userName)
+        {
+            if (string.IsNullOrWhiteSpace(userName))
+            {
+                throw new ValidationException("Invalid credentials.");
+            }
+        }
+
+        private void ValidatePassword(string password)
+        {
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                throw new ValidationException("Invalid credentials.");
+            }
+        }
+
+        private void ValidateRoles(IEnumerable<string> roles)
+        {
+            if (roles == null || !roles.Any())
+            {
+                throw new ValidationException("Roles cannot be empty.");
+            }
+        }
+
+        private void ValidateRoleName(string roleName)
+        {
+            if (string.IsNullOrWhiteSpace(roleName))
+            {
+                throw new ValidationException("Role name cannot be empty.");
+            }
+        }
     }
 }
